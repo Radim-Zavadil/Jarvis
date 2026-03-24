@@ -1,0 +1,12 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.env
+
+# Google OAuth token — contains sensitive refresh token, never commit
+bot/token.json
+
+# Virtual environment
+venv/
+.venv/
