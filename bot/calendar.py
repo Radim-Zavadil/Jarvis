@@ -1,5 +1,5 @@
 """
-calendar.py — fetches today's events from the user's primary Google Calendar.
+calendar.py — fetches today's events from ALL of the user's Google Calendars.
 
 Credential strategy (tries each in order):
   1. GOOGLE_TOKEN_JSON env var — serialised OAuth2 token JSON (fastest, for CI)
@@ -23,6 +23,11 @@ CZECH_TZ = pytz.timezone("Europe/Prague")
 _BOT_DIR = Path(__file__).parent
 _CREDS_FILE = _BOT_DIR / "credentials.json"
 _TOKEN_FILE = _BOT_DIR / "token.json"
+
+# Calendar IDs to skip (read-only holiday/system calendars)
+_SKIP_CALENDAR_IDS = {
+    "cs.czech#holiday@group.v.calendar.google.com",  # Czech public holidays
+}
 
 
 def _build_service():
@@ -88,36 +93,64 @@ def _build_service():
 
 
 def fetch_today_events() -> list[dict]:
-    """Return today's calendar events sorted by start time (Czech timezone)."""
+    """Return today's events from ALL calendars, sorted by start time (Czech timezone)."""
     service = _build_service()
 
     now_prague = datetime.now(CZECH_TZ)
     start_of_day = now_prague.replace(hour=0, minute=0, second=0, microsecond=0)
     end_of_day = now_prague.replace(hour=23, minute=59, second=59, microsecond=0)
 
-    result = (
-        service.events()
-        .list(
-            calendarId="primary",
-            timeMin=start_of_day.isoformat(),
-            timeMax=end_of_day.isoformat(),
-            singleEvents=True,
-            orderBy="startTime",
-        )
-        .execute()
-    )
+    # Fetch all calendars the user has access to
+    calendar_list = service.calendarList().list().execute()
+    calendars = calendar_list.get("items", [])
 
-    events = []
-    for item in result.get("items", []):
-        start = item["start"]
-        if "dateTime" in start:
-            dt = datetime.fromisoformat(start["dateTime"]).astimezone(CZECH_TZ)
-            time_str = dt.strftime("%H:%M")
-        else:
-            time_str = "All day"
-        events.append({"time": time_str, "summary": item.get("summary", "(No title)")})
+    all_events = []
 
-    return events
+    for cal in calendars:
+        cal_id = cal.get("id", "")
+        cal_name = cal.get("summary", "")
+
+        # Skip unwanted system calendars
+        if cal_id in _SKIP_CALENDAR_IDS:
+            print(f"[calendar] Skipping: {cal_name}")
+            continue
+
+        try:
+            result = (
+                service.events()
+                .list(
+                    calendarId=cal_id,
+                    timeMin=start_of_day.isoformat(),
+                    timeMax=end_of_day.isoformat(),
+                    singleEvents=True,
+                    orderBy="startTime",
+                )
+                .execute()
+            )
+
+            for item in result.get("items", []):
+                start = item["start"]
+                if "dateTime" in start:
+                    dt = datetime.fromisoformat(start["dateTime"]).astimezone(CZECH_TZ)
+                    time_str = dt.strftime("%H:%M")
+                    sort_key = dt
+                else:
+                    time_str = "All day"
+                    sort_key = start_of_day
+
+                all_events.append({
+                    "time": time_str,
+                    "summary": item.get("summary", "(No title)"),
+                    "calendar": cal_name,
+                    "_sort": sort_key,
+                })
+
+        except Exception as e:
+            print(f"[calendar] Error fetching {cal_name}: {e}")
+
+    # Sort all events by start time
+    all_events.sort(key=lambda e: e["_sort"])
+    return all_events
 
 
 def format_calendar_section(events: list[dict]) -> str:
