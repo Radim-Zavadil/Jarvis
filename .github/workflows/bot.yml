@@ -2,9 +2,14 @@ name: Telegram Bot
 
 on:
   schedule:
-    - cron: '0 6 * * *'      # Daily morning briefing — 7:00 AM CET (winter) / 6:00 AM UTC
-    - cron: '*/30 * * * *'   # F1 session checker — every 30 minutes
-  workflow_dispatch:          # Allow manual trigger from GitHub UI
+    # Morning briefing — 7:00 AM CET (UTC+1, winter): 06:00 UTC
+    - cron: '0 6 * * *'
+    # Morning briefing — 7:00 AM CEST (UTC+2, summer): 05:00 UTC
+    - cron: '0 5 * * *'
+    # F1 session checker — Fri/Sat/Sun only, every 30 min between 05:00–22:00 UTC
+    # (covers all F1 session times globally)
+    - cron: '*/30 5-22 * * 5,6,0'
+  workflow_dispatch:
     inputs:
       mode:
         description: 'Mode to run (morning or f1_check)'
@@ -44,10 +49,15 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "mode=${{ github.event.inputs.mode }}" >> "$GITHUB_OUTPUT"
-          elif [ "$(date -u +'%M')" = "00" ] && [ "$(date -u +'%H')" = "06" ]; then
-            echo "mode=morning" >> "$GITHUB_OUTPUT"
           else
-            echo "mode=f1_check" >> "$GITHUB_OUTPUT"
+            # Check if it's 7:00 AM in Prague (Europe/Prague timezone)
+            PRAGUE_HOUR=$(TZ="Europe/Prague" date +'%H')
+            PRAGUE_MIN=$(TZ="Europe/Prague" date +'%M')
+            if [ "$PRAGUE_HOUR" = "07" ] && [ "$PRAGUE_MIN" = "00" ]; then
+              echo "mode=morning" >> "$GITHUB_OUTPUT"
+            else
+              echo "mode=f1_check" >> "$GITHUB_OUTPUT"
+            fi
           fi
 
       - name: Run bot
