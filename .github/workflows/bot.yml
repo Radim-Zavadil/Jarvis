@@ -6,9 +6,8 @@ on:
     - cron: '0 6 * * *'
     # Morning briefing — 7:00 AM CEST (UTC+2, summer): 05:00 UTC
     - cron: '0 5 * * *'
-    # F1 session checker — Fri/Sat/Sun only, every 30 min between 05:00–22:00 UTC
-    # (covers all F1 session times globally)
-    - cron: '*/30 5-22 * * 5,6,0'
+    # F1 session checker — Fri/Sat/Sun only, every 30 min (covers all sessions globally)
+    - cron: '*/30 0-23 * * 5,6,0'
   workflow_dispatch:
     inputs:
       mode:

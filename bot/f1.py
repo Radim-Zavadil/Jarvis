@@ -149,19 +149,20 @@ def next_race_info() -> str:
         # Try next year in case we are between seasons
         meetings = _openf1_meetings(year + 1)
 
-    # Find upcoming meetings (date_start in the future)
-    future = []
+    # Find meetings that have not ended yet (date_end in the future)
+    upcoming = []
     for m in meetings:
-        dt = _parse_dt(m.get("date_start"))
-        if dt and dt > now_utc:
-            future.append((dt, m))
+        end_dt = _parse_dt(m.get("date_end"))
+        if end_dt and end_dt > now_utc:
+            start_dt = _parse_dt(m.get("date_start"))
+            upcoming.append((start_dt, m))
 
-    if not future:
+    if not upcoming:
         return "🏎️ *NEXT F1 RACE*\n_No upcoming races found._"
 
-    # Earliest upcoming meeting
-    future.sort(key=lambda x: x[0])
-    race_start_dt, meeting = future[0]
+    # Earliest upcoming/ongoing meeting
+    upcoming.sort(key=lambda x: x[0] if x[0] else datetime.max.replace(tzinfo=timezone.utc))
+    race_start_dt, meeting = upcoming[0]
     meeting_key = meeting.get("meeting_key")
 
     # Try to get the actual Race session start time for this meeting
@@ -180,23 +181,44 @@ def next_race_info() -> str:
     circuit = meeting.get("circuit_short_name", "")
 
     prague_dt = target_dt.astimezone(CZECH_TZ)
-    # Windows-safe date formatting (no %-d)
+    now_prague = now_utc.astimezone(CZECH_TZ)
+
+    # Label detection
+    is_race_today = False
+    if race_session_dt and race_session_dt.astimezone(CZECH_TZ).date() == now_prague.date():
+        is_race_today = True
+
+    is_ongoing = race_start_dt <= now_utc
+
+    if is_race_today:
+        label_header = "🏁 *RACE TODAY!*"
+    elif is_ongoing:
+        label_header = "🏎️ *GP WEEKEND*"
+    else:
+        label_header = "🏎️ *NEXT F1 RACE*"
+
+    # Date formatting
     day = str(prague_dt.day)
     date_str = prague_dt.strftime(f"%A, %B {day}, %Y")
     time_str = prague_dt.strftime("%H:%M")
 
     delta = target_dt - now_utc
     total_secs = int(delta.total_seconds())
-    days = total_secs // 86400
-    hours = (total_secs % 86400) // 3600
-    minutes = (total_secs % 3600) // 60
+    
+    if total_secs > 0:
+        days = total_secs // 86400
+        hours = (total_secs % 86400) // 3600
+        minutes = (total_secs % 3600) // 60
+        countdown_str = f"⏳ {days}d {hours}h {minutes}m to go"
+    else:
+        countdown_str = "🟢 *Session in progress* (or already started)"
 
-    label = "Race" if race_session_dt else "Weekend start"
+    session_label = "Race" if race_session_dt else "Weekend start"
     lines = [
-        "🏎️ *NEXT F1 RACE*",
+        label_header,
         f"*{meeting_name}* — {circuit}, {country}",
-        f"📅 {label}: {date_str} at {time_str} CET",
-        f"⏳ {days}d {hours}h {minutes}m to go",
+        f"📅 {session_label}: {date_str} at {time_str} CET",
+        countdown_str,
     ]
     return "\n".join(lines)
 
@@ -255,35 +277,54 @@ def format_race_result(session: dict) -> str:
     meeting = session.get("_meeting", {})
     race_name = meeting.get("meeting_name", "Grand Prix")
     session_key = session["session_key"]
-
     drivers = _openf1_drivers(session_key)
     positions = _openf1_race_positions(session_key)
 
-    lines = [f"🏁 *RACE RESULT — {race_name}*", "", "🏆 *Top 10 Drivers:*"]
+    lines = [f"🏁 *RACE RESULT — {race_name}*", ""]
 
     # Track team points earned in this race
     team_points: dict[str, int] = {}
-
-    for entry in positions[:10]:
+    
+    # Process positions to track points for all, but format specifically
+    all_results = []
+    for entry in positions:
         dn = entry.get("driver_number")
         pos = entry.get("position", "?")
         drv = drivers.get(dn, {})
         name = drv.get("full_name", f"Driver #{dn}")
         team = drv.get("team_name", "Unknown")
         pts = POSITION_POINTS.get(pos, 0)
-
-        medal = MEDAL.get(pos, f"{pos}.")
-        pts_str = f"  +{pts} pts" if pts else ""
-        lines.append(f"{medal} {name} ({team}){pts_str}")
-
-        # Accumulate team points
-        if team:
+        
+        all_results.append({
+            "pos": pos,
+            "name": name,
+            "team": team,
+            "pts": pts
+        })
+        
+        if team and team != "Unknown":
             team_points[team] = team_points.get(team, 0) + pts
 
-    # Top 5 constructor points from this race
+    # Top 3 section
+    lines.append("🏆 *Top 3 Drivers (Podium):*")
+    for res in all_results[:3]:
+        medal = MEDAL.get(res["pos"], f"{res['pos']}.")
+        pts_str = f"  (+{res['pts']} pts)" if res['pts'] else ""
+        lines.append(f"{medal} {res['name']} ({res['team']}){pts_str}")
+
+    # Top 10 section
+    if len(all_results) > 3:
+        lines.append("")
+        lines.append("🏁 *Full Top 10:*")
+        for res in all_results[:10]:
+            medal = MEDAL.get(res["pos"], f"{res['pos']}.")
+            pts_str = f"  +{res['pts']} pts" if res['pts'] else ""
+            lines.append(f"{medal} {res['name']} ({res['team']}){pts_str if res['pos'] > 3 else ''}")
+
+    # Top 3 constructor points from this race
     if team_points:
-        top_teams = sorted(team_points.items(), key=lambda x: x[1], reverse=True)[:5]
-        lines += ["", "🏗️ *Top 5 Teams (this race):*"]
+        top_teams = sorted(team_points.items(), key=lambda x: x[1], reverse=True)[:3]
+        lines += ["", "🏗️ *Top 3 Teams (this race):*"]
         for i, (team, pts) in enumerate(top_teams, 1):
             medal = MEDAL.get(i, f"{i}.")
             lines.append(f"{medal} {team} — {pts} pts")
