@@ -26,8 +26,11 @@ POSITION_POINTS = {
     6: 8,  7: 6,  8: 4,  9: 2,  10: 1,
 }
 
-# How far back to look when deciding a session is "fresh" (slightly over 30 min)
-FRESHNESS_WINDOW_MINUTES = 35
+# How far back to look when deciding a session is "fresh" (extended to handle CI delays)
+FRESHNESS_WINDOW_MINUTES = 70
+
+
+from bot.telegram import escape_html
 
 
 # ──────────────────────────────────────────────
@@ -158,7 +161,7 @@ def next_race_info() -> str:
             upcoming.append((start_dt, m))
 
     if not upcoming:
-        return "🏎️ *NEXT F1 RACE*\n_No upcoming races found._"
+        return "🏎️ <b>NEXT F1 RACE</b>\n<i>No upcoming races found.</i>"
 
     # Earliest upcoming/ongoing meeting
     upcoming.sort(key=lambda x: x[0] if x[0] else datetime.max.replace(tzinfo=timezone.utc))
@@ -191,11 +194,11 @@ def next_race_info() -> str:
     is_ongoing = race_start_dt <= now_utc
 
     if is_race_today:
-        label_header = "🏁 *RACE TODAY!*"
+        label_header = "🏁 <b>RACE TODAY!</b>"
     elif is_ongoing:
-        label_header = "🏎️ *GP WEEKEND*"
+        label_header = "🏎️ <b>GP WEEKEND</b>"
     else:
-        label_header = "🏎️ *NEXT F1 RACE*"
+        label_header = "🏎️ <b>NEXT F1 RACE</b>"
 
     # Date formatting
     day = str(prague_dt.day)
@@ -211,12 +214,18 @@ def next_race_info() -> str:
         minutes = (total_secs % 3600) // 60
         countdown_str = f"⏳ {days}d {hours}h {minutes}m to go"
     else:
-        countdown_str = "🟢 *Session in progress* (or already started)"
+        countdown_str = "🟢 <b>Session in progress</b> (or already started)"
 
     session_label = "Race" if race_session_dt else "Weekend start"
+    
+    # Escape data from API
+    safe_meeting = escape_html(meeting_name)
+    safe_circuit = escape_html(circuit)
+    safe_country = escape_html(country)
+
     lines = [
         label_header,
-        f"*{meeting_name}* — {circuit}, {country}",
+        f"<b>{safe_meeting}</b> — {safe_circuit}, {safe_country}",
         f"📅 {session_label}: {date_str} at {time_str} CET",
         countdown_str,
     ]
@@ -275,12 +284,12 @@ def get_latest_completed_session() -> Optional[dict]:
 def format_race_result(session: dict) -> str:
     """Build race result message — Top 10 finishers + Top 5 constructor points from this race."""
     meeting = session.get("_meeting", {})
-    race_name = meeting.get("meeting_name", "Grand Prix")
+    race_name = escape_html(meeting.get("meeting_name", "Grand Prix"))
     session_key = session["session_key"]
     drivers = _openf1_drivers(session_key)
     positions = _openf1_race_positions(session_key)
 
-    lines = [f"🏁 *RACE RESULT — {race_name}*", ""]
+    lines = [f"🏁 <b>RACE RESULT — {race_name}</b>", ""]
 
     # Track team points earned in this race
     team_points: dict[str, int] = {}
@@ -306,28 +315,28 @@ def format_race_result(session: dict) -> str:
             team_points[team] = team_points.get(team, 0) + pts
 
     # Top 3 section
-    lines.append("🏆 *Top 3 Drivers (Podium):*")
+    lines.append("🏆 <b>Top 3 Drivers (Podium):</b>")
     for res in all_results[:3]:
         medal = MEDAL.get(res["pos"], f"{res['pos']}.")
         pts_str = f"  (+{res['pts']} pts)" if res['pts'] else ""
-        lines.append(f"{medal} {res['name']} ({res['team']}){pts_str}")
+        lines.append(f"{medal} {escape_html(res['name'])} ({escape_html(res['team'])}){pts_str}")
 
     # Top 10 section
     if len(all_results) > 3:
         lines.append("")
-        lines.append("🏁 *Full Top 10:*")
+        lines.append("🏁 <b>Full Top 10:</b>")
         for res in all_results[:10]:
             medal = MEDAL.get(res["pos"], f"{res['pos']}.")
             pts_str = f"  +{res['pts']} pts" if res['pts'] else ""
-            lines.append(f"{medal} {res['name']} ({res['team']}){pts_str if res['pos'] > 3 else ''}")
+            lines.append(f"{medal} {escape_html(res['name'])} ({escape_html(res['team'])}){pts_str if res['pos'] > 3 else ''}")
 
     # Top 3 constructor points from this race
     if team_points:
         top_teams = sorted(team_points.items(), key=lambda x: x[1], reverse=True)[:3]
-        lines += ["", "🏗️ *Top 3 Teams (this race):*"]
+        lines += ["", "🏗️ <b>Top 3 Teams (this race):</b>"]
         for i, (team, pts) in enumerate(top_teams, 1):
             medal = MEDAL.get(i, f"{i}.")
-            lines.append(f"{medal} {team} — {pts} pts")
+            lines.append(f"{medal} {escape_html(team)} — {pts} pts")
 
     return "\n".join(lines)
 
@@ -335,15 +344,15 @@ def format_race_result(session: dict) -> str:
 def format_session_result(session: dict) -> str:
     """Build practice/qualifying result message — Top 3 drivers only."""
     meeting = session.get("_meeting", {})
-    race_name = meeting.get("meeting_name", "Grand Prix")
-    session_type = session.get("session_name", "Session")
+    race_name = escape_html(meeting.get("meeting_name", "Grand Prix"))
+    session_type = escape_html(session.get("session_name", "Session"))
     session_key = session["session_key"]
 
     drivers = _openf1_drivers(session_key)
     lap_data = _openf1_lap_times(session_key)
 
     if not lap_data:
-        return f"⏱️ *{session_type.upper()} — {race_name}*\n_No lap time data available._"
+        return f"⏱️ <b>{session_type.upper()} — {race_name}</b>\n<i>No lap time data available.</i>"
 
     best_lap = lap_data[0]["best_lap"]
 
@@ -353,13 +362,13 @@ def format_session_result(session: dict) -> str:
     elif "sprint" in session_type.lower():
         emoji = "💨"
 
-    lines = [f"{emoji} *{session_type.upper()} — {race_name}*", ""]
+    lines = [f"{emoji} <b>{session_type.upper()} — {race_name}</b>", ""]
 
     for i, entry in enumerate(lap_data[:3], 1):
         dn = entry["driver_number"]
         drv = drivers.get(dn, {})
-        name = drv.get("full_name", f"Driver #{dn}")
-        team = drv.get("team_name", "")
+        name = escape_html(drv.get("full_name", f"Driver #{dn}"))
+        team = escape_html(drv.get("team_name", ""))
         lap_time = entry["best_lap"]
         lap_str = _format_laptime(lap_time)
 

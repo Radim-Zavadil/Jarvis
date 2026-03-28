@@ -80,12 +80,17 @@ def fetch_tasks() -> list[dict]:
     return sorted(tasks, key=lambda t: (t["priority"] == 0, t["priority"]))
 
 
+from bot.telegram import escape_html
+
+
 def format_tasks_section(tasks: list[dict]) -> str:
     """Format tasks for the morning briefing message."""
     if not tasks:
-        return "📋 *LINEAR TASKS*\n_No open tasks_ ✅"
+        return "📋 <b>LINEAR TASKS</b>\n<i>No open tasks</i> ✅"
 
-    lines = ["📋 *LINEAR TASKS*"]
+    lines = ["📋 <b>LINEAR TASKS</b>"]
     for task in tasks:
-        lines.append(f"- {task['title']} [Priority: {task['priority_label']}]")
+        safe_title = escape_html(task['title'])
+        safe_priority = escape_html(task['priority_label'])
+        lines.append(f"- {safe_title} [Priority: {safe_priority}]")
     return "\n".join(lines)

@@ -29,7 +29,7 @@ def run_morning_briefing() -> None:
     now_prague = datetime.now(CZECH_TZ)
     day = str(now_prague.day)
     date_str = now_prague.strftime(f"%A, %B {day}, %Y")
-    greeting = f"🌅 *Good morning Radim!*\n_{date_str}_"
+    greeting = f"🌅 <b>Good morning Radim!</b>\n<i>{date_str}</i>"
 
     message = "\n\n".join([greeting, tasks_section, calendar_section, countdown])
     telegram.send_message(message)

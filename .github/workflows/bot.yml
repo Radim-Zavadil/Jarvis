@@ -51,9 +51,8 @@ jobs:
           else
             # Check if it's around 7:00 AM in Prague (Europe/Prague timezone)
             PRAGUE_HOUR=$(TZ="Europe/Prague" date +'%H')
-            PRAGUE_MIN=$(TZ="Europe/Prague" date +'%M')
-            # GitHub crons are often delayed, so we check 07:00 to 07:29.
-            if [ "$PRAGUE_HOUR" = "07" ] && [ "$((10#$PRAGUE_MIN))" -lt 30 ]; then
+            # GitHub crons are often delayed, so we check 07:00 to 08:59.
+            if [ "$PRAGUE_HOUR" = "07" ] || [ "$PRAGUE_HOUR" = "08" ]; then
               echo "mode=morning" >> "$GITHUB_OUTPUT"
             else
               echo "mode=f1_check" >> "$GITHUB_OUTPUT"

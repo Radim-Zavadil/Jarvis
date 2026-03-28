@@ -153,12 +153,16 @@ def fetch_today_events() -> list[dict]:
     return all_events
 
 
+from bot.telegram import escape_html
+
+
 def format_calendar_section(events: list[dict]) -> str:
     """Format today's events for the morning briefing message."""
     if not events:
-        return "📅 *TODAY'S CALENDAR*\n_Nothing scheduled today_ 🎉"
+        return "📅 <b>TODAY'S CALENDAR</b>\n<i>Nothing scheduled today</i> 🎉"
 
-    lines = ["📅 *TODAY'S CALENDAR*"]
+    lines = ["📅 <b>TODAY'S CALENDAR</b>"]
     for ev in events:
-        lines.append(f"- {ev['time']} – {ev['summary']}")
+        safe_summary = escape_html(ev['summary'])
+        lines.append(f"- {ev['time']} – {safe_summary}")
     return "\n".join(lines)
