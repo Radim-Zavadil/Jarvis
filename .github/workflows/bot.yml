@@ -48,15 +48,12 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "mode=${{ github.event.inputs.mode }}" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event.schedule }}" = "0 6 * * *" ] || [ "${{ github.event.schedule }}" = "0 5 * * *" ]; then
+            # Daily morning cron (winter/summer UTC shifts)
+            echo "mode=morning" >> "$GITHUB_OUTPUT"
           else
-            # Check if it's around 7:00 AM in Prague (Europe/Prague timezone)
-            PRAGUE_HOUR=$(TZ="Europe/Prague" date +'%H')
-            # GitHub crons are often delayed, so we check 07:00 to 08:59.
-            if [ "$PRAGUE_HOUR" = "07" ] || [ "$PRAGUE_HOUR" = "08" ]; then
-              echo "mode=morning" >> "$GITHUB_OUTPUT"
-            else
-              echo "mode=f1_check" >> "$GITHUB_OUTPUT"
-            fi
+            # 30-minute F1 sesson checker cron (or any other trigger)
+            echo "mode=f1_check" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Run bot

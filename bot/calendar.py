@@ -131,7 +131,8 @@ def fetch_today_events() -> list[dict]:
             for item in result.get("items", []):
                 start = item["start"]
                 if "dateTime" in start:
-                    dt = datetime.fromisoformat(start["dateTime"]).astimezone(CZECH_TZ)
+                    dt_str = start["dateTime"].replace("Z", "+00:00")
+                    dt = datetime.fromisoformat(dt_str).astimezone(CZECH_TZ)
                     time_str = dt.strftime("%H:%M")
                     sort_key = dt
                 else:

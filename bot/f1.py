@@ -138,6 +138,26 @@ def _openf1_lap_times(session_key: int) -> list[dict]:
     )
 
 
+def _fetch_standings(standings_type: str) -> list[dict]:
+    """
+    Fetch current World Championship standings from Jolpica (Ergast replacement).
+    standings_type: 'driver' or 'constructor'
+    """
+    url = f"https://api.jolpi.ca/ergast/f1/current/{standings_type}Standings.json"
+    data = _get(url)
+    if not data or "MRData" not in data:
+        return []
+
+    try:
+        table = data["MRData"]["StandingsTable"]["StandingsLists"]
+        if not table:
+            return []
+        
+        list_key = "DriverStandings" if standings_type == "driver" else "ConstructorStandings"
+        return table[0].get(list_key, [])
+    except (KeyError, IndexError):
+        return []
+
 # ──────────────────────────────────────────────
 # Public API
 # ──────────────────────────────────────────────
@@ -337,6 +357,31 @@ def format_race_result(session: dict) -> str:
         for i, (team, pts) in enumerate(top_teams, 1):
             medal = MEDAL.get(i, f"{i}.")
             lines.append(f"{medal} {escape_html(team)} — {pts} pts")
+
+    # ──────────────────────────────────────────
+    # WORLD CHAMPIONSHIP LEADERBOARDS
+    # ──────────────────────────────────────────
+    
+    # Driver Standings Top 10
+    driver_standings = _fetch_standings("driver")
+    if driver_standings:
+        lines += ["", "🏆 <b>WORLD CHAMPIONSHIP (Top 10):</b>"]
+        for s in driver_standings[:10]:
+            pos = s.get("position", "?")
+            pts = s.get("points", "0")
+            name = s.get("Driver", {}).get("familyName", "Driver")
+            # Some drivers might have same family name, but usually it's fine for a quick look
+            lines.append(f"<code>{pos:>2}.</code> {escape_html(name)} — {pts} pts")
+
+    # Team Standings Top 5
+    team_standings = _fetch_standings("constructor")
+    if team_standings:
+        lines += ["", "🏗️ <b>TEAM STANDINGS (Top 5):</b>"]
+        for s in team_standings[:5]:
+            pos = s.get("position", "?")
+            pts = s.get("points", "0")
+            name = s.get("Constructor", {}).get("name", "Team")
+            lines.append(f"<code>{pos:>2}.</code> {escape_html(name)} — {pts} pts")
 
     return "\n".join(lines)
 
