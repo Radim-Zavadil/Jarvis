@@ -21,8 +21,9 @@ def main() -> None:
     mode = sys.argv[1].lower()
 
     if mode == "morning":
-        print("[main] Running morning briefing...")
-        run_morning_briefing()
+        force = "--force" in [a.lower() for a in sys.argv]
+        print(f"[main] Running morning briefing (force={force})...")
+        run_morning_briefing(force=force)
     elif mode == "f1_check":
         print("[main] Running F1 session check...")
         run_f1_check()

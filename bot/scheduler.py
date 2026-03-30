@@ -17,8 +17,15 @@ from bot import f1, calendar, linear, telegram
 CZECH_TZ = pytz.timezone("Europe/Prague")
 
 
-def run_morning_briefing() -> None:
+def run_morning_briefing(force: bool = False) -> None:
     """Compose and send the daily morning briefing."""
+    now_prague = datetime.now(CZECH_TZ)
+    
+    # Only run at 7:00 AM Prague time unless forced (to avoid duplicate triggers)
+    if not force and now_prague.hour != 7:
+        print(f"[scheduler] Skipping morning briefing (it is {now_prague.hour}:00, expected 7:00)")
+        return
+
     tasks = linear.fetch_tasks()
     events = calendar.fetch_today_events()
     countdown = f1.next_race_info()
@@ -26,7 +33,6 @@ def run_morning_briefing() -> None:
     tasks_section = linear.format_tasks_section(tasks)
     calendar_section = calendar.format_calendar_section(events)
 
-    now_prague = datetime.now(CZECH_TZ)
     day = str(now_prague.day)
     date_str = now_prague.strftime(f"%A, %B {day}, %Y")
     greeting = f"🌅 <b>Good morning Radim!</b>\n<i>{date_str}</i>"

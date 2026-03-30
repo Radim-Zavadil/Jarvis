@@ -47,7 +47,11 @@ jobs:
         id: mode
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "mode=${{ github.event.inputs.mode }}" >> "$GITHUB_OUTPUT"
+            if [ "${{ github.event.inputs.mode }}" = "morning" ]; then
+              echo "mode=morning --force" >> "$GITHUB_OUTPUT"
+            else
+              echo "mode=${{ github.event.inputs.mode }}" >> "$GITHUB_OUTPUT"
+            fi
           elif [ "${{ github.event.schedule }}" = "0 6 * * *" ] || [ "${{ github.event.schedule }}" = "0 5 * * *" ]; then
             # Daily morning cron (winter/summer UTC shifts)
             echo "mode=morning" >> "$GITHUB_OUTPUT"
