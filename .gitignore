@@ -10,3 +10,6 @@ bot/token.json
 # Virtual environment
 venv/
 .venv/
+
+# Node modules (added for Render deployment consistency)
+node_modules/
