@@ -8,6 +8,9 @@ Usage:
 """
 import os
 import sys
+import threading
+import time
+import schedule
 from flask import Flask
 from dotenv import load_dotenv
 
@@ -40,6 +43,17 @@ def trigger_f1():
     except Exception as e:
         return f"Error: {str(e)}", 500
 
+def run_scheduler():
+    # Schedule morning briefing at 8:00 AM
+    schedule.every().day.at("08:00").do(run_morning_briefing)
+    # Check F1 every 5 minutes
+    schedule.every(5).minutes.do(run_f1_check)
+
+    print("[main] Scheduler started...")
+    while True:
+        schedule.run_pending()
+        time.sleep(1)
+
 def main() -> None:
     if len(sys.argv) < 2:
         print("Usage: python main.py [morning|f1_check|render]")
@@ -55,7 +69,11 @@ def main() -> None:
         print("[main] Running F1 session check...")
         run_f1_check()
     elif mode == "render":
-        # Get port from environment variable (default to 8080)
+        # Start scheduler in background thread
+        thread = threading.Thread(target=run_scheduler, daemon=True)
+        thread.start()
+
+        # Start Flask server
         port = int(os.environ.get("PORT", 8080))
         print(f"[main] Starting Flask server on port {port}...")
         app.run(host="0.0.0.0", port=port)
