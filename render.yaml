@@ -3,7 +3,7 @@ services:
     name: telegram-bot
     env: python
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn main:app
+    startCommand: gunicorn --preload --workers 1 main:app
     envVars:
       - key: PORT
         value: 8080
@@ -17,3 +17,5 @@ services:
         sync: false
       - key: GOOGLE_CALENDAR_CREDENTIALS
         sync: false
+      - key: TZ
+        value: Europe/Prague
